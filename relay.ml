@@ -196,13 +196,13 @@ module V = struct
   let max_window_height_int32 = 6144l
   let check_width_height_int32 t raise ~untrusted_width ~untrusted_height =
     if untrusted_width <= 0l then (
-      raise t ~message:"Width is negative or 0"
+      raise t ~message:"Width %ld is negative or 0" untrusted_width
     ) else if untrusted_width > max_window_width_int32 then (
-      raise t ~message:"Width is excessive"
+      raise t ~message:"Width %ld is excessive" untrusted_width
     ) else if untrusted_height <= 0l then (
-      raise t ~message:"Height is negative or 0"
+      raise t ~message:"Height %ld is negative or 0" untrusted_height
     ) else if untrusted_height > max_window_height_int32 then (
-      raise t ~message:"Height is excessive"
+      raise t ~message:"Height %ld is excessive" untrusted_height
     ) else (
       ()
     )
