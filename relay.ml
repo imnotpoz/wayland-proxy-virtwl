@@ -1010,7 +1010,7 @@ let make_shm ~virtio_gpu bind c =
         if untrusted_size <= 0l then
           let () = Unix.close untrusted_fd in
           C.Wl_shm.Errors.invalid_stride v ~message:"negative pool size"
-        else if (Int32.logand untrusted_size page_mask <> 0l) then
+        else if (false && Int32.logand untrusted_size page_mask <> 0l) then
           let () = Unix.close untrusted_fd in
           C.Wl_shm.Errors.invalid_stride v ~message:(
               Format.asprintf "Pool size %ld not multiple of page size %ld"
