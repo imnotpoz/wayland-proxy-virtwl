@@ -298,6 +298,7 @@ let validate_shm_parameters
       ~(format:int32)
       (shm: _ C.Wl_shm_pool.t) =
   (if buffer_size < 0l then assert false (* Bug!!! *));
+  Log.warn (fun f -> f "Validating shm parameters");
   V.check_width_height_int32 shm shm_pool_invalid_stride_str ~untrusted_height ~untrusted_width;
   if untrusted_offset < 0l then
     shm_pool_invalid_stride shm "Negative offset %ld" untrusted_offset;
@@ -610,6 +611,7 @@ let make_surface ~xwayland ~host_surface c =
     method on_damage p ~untrusted_x ~untrusted_y ~untrusted_width ~untrusted_height =
       (* sanitize start *)
       V.check_x_y p C.Wl_surface.Errors.invalid_offset ~untrusted_x ~untrusted_y;
+      Log.warn (fun f -> f "Checking width and height when processing damage request");
       V.check_width_height_int32 p C.Wl_surface.Errors.invalid_offset ~untrusted_width ~untrusted_height;
       let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
       (* sanitize end *)
@@ -622,6 +624,7 @@ let make_surface ~xwayland ~host_surface c =
     method on_damage_buffer p ~untrusted_x ~untrusted_y ~untrusted_width ~untrusted_height =
       (* sanitize start *)
       V.check_x_y p C.Wl_surface.Errors.invalid_offset ~untrusted_x ~untrusted_y;
+      Log.warn (fun f -> f "Checking width and height when processing damage_buffer request");
       V.check_width_height_int32 p C.Wl_surface.Errors.invalid_offset ~untrusted_width ~untrusted_height;
       let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
       (* sanitize end *)
@@ -1075,6 +1078,7 @@ module Linux_dmabuf = struct
       method private add t ~untrusted_format ~untrusted_width ~untrusted_height =
         check_used t created;
         check_complete t have_modifiers;
+        Log.warn (fun f -> f "Checking width and height in dmabuf add request");
         V.check_width_height_int32 t C.Zwp_linux_buffer_params_v1.Errors.invalid_dimensions
           ~untrusted_width ~untrusted_height;
         if not (Relay_stubs.validate_format ~untrusted_format ~untrusted_width ~untrusted_height) then (
@@ -1330,6 +1334,7 @@ let make_xdg_surface ~tag ~host_xdg_surface c =
              ~(untrusted_y:int32)
              ~(untrusted_width:int32)
              ~(untrusted_height:int32): unit =
+      Log.warn (fun f -> f "Checking width and height in set_window_geometry");
       V.check_width_height_int32 p C.Xdg_surface.Errors.invalid_size ~untrusted_width ~untrusted_height;
       V.check_x_y p C.Xdg_surface.Errors.invalid_size ~untrusted_x ~untrusted_y;
 
@@ -1360,6 +1365,7 @@ let make_positioner ~host_positioner c =
              ~(untrusted_y:int32)
              ~(untrusted_width:int32)
              ~(untrusted_height:int32): unit =
+      Log.warn (fun f -> f "Checking width and height in set_anchor_rect");
       V.check_width_height_int32 p C.Xdg_positioner.Errors.invalid_input ~untrusted_width ~untrusted_height;
       V.check_x_y p C.Xdg_positioner.Errors.invalid_input ~untrusted_x ~untrusted_y;
       let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
@@ -1377,6 +1383,8 @@ let make_positioner ~host_positioner c =
       H.Xdg_positioner.set_offset h ~x:untrusted_x ~y:untrusted_y
     method on_set_size t ~(untrusted_width:int32) ~(untrusted_height:int32): unit =
       (* sanitize start *)
+      Log.warn (fun f -> f "Checking width and height in set_size");
+
       V.check_width_height_int32 t (fun _ -> assert false) ~untrusted_width ~untrusted_height;
       let (width, height) = (untrusted_width, untrusted_height) in
       (* sanitize end.  FIXME: is this enough sanitization? *)
