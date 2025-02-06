@@ -610,27 +610,32 @@ let make_surface ~xwayland ~host_surface c =
 
     method on_damage p ~untrusted_x ~untrusted_y ~untrusted_width ~untrusted_height =
       (* sanitize start *)
-      V.check_x_y p C.Wl_surface.Errors.invalid_offset ~untrusted_x ~untrusted_y;
-      Log.warn (fun f -> f "Checking width and height when processing damage request");
-      V.check_width_height_int32 p C.Wl_surface.Errors.invalid_offset ~untrusted_width ~untrusted_height;
-      let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
-      (* sanitize end *)
-      (* FIXME: bounds check properly by knowing the actual dimensions *)
-      when_configured @@ fun () ->
-      let (x, y) = scale_to_host ~xwayland (x, y) in
-      let (width, height) = scale_to_host ~xwayland (width, height) in
-      H.Wl_surface.damage h ~x ~y ~width ~height
+
+      if untrusted_width < 0l || untrusted_height < 0l then
+        C.Wl_surface.Errors.invalid_offset p ~message:"Negative width or height in wl_surface.damage_buffer"
+      else if untrusted_width <> 0l && untrusted_height <> 0l then (
+        V.check_x_y p C.Wl_surface.Errors.invalid_offset ~untrusted_x ~untrusted_y;
+        (* Assume the compositor can handle bad damage *)
+        let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
+        (* sanitize end *)
+        when_configured @@ fun () ->
+        let (x, y) = scale_to_host ~xwayland (x, y) in
+        let (width, height) = scale_to_host ~xwayland (width, height) in
+        H.Wl_surface.damage h ~x ~y ~width ~height
+      )
 
     method on_damage_buffer p ~untrusted_x ~untrusted_y ~untrusted_width ~untrusted_height =
       (* sanitize start *)
-      V.check_x_y p C.Wl_surface.Errors.invalid_offset ~untrusted_x ~untrusted_y;
-      Log.warn (fun f -> f "Checking width and height when processing damage_buffer request");
-      V.check_width_height_int32 p C.Wl_surface.Errors.invalid_offset ~untrusted_width ~untrusted_height;
-      let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
-      (* sanitize end *)
-      (* FIXME: bounds check properly by knowing the actual dimensions *)
-      when_configured @@ fun () ->
-      H.Wl_surface.damage_buffer h ~x ~y ~width ~height
+      if untrusted_width < 0l || untrusted_height < 0l then
+        C.Wl_surface.Errors.invalid_offset p ~message:"Negative width or height in wl_surface.damage_buffer"
+      else if untrusted_width <> 0l && untrusted_height <> 0l then (
+        V.check_x_y p C.Wl_surface.Errors.invalid_offset ~untrusted_x ~untrusted_y;
+        (* Assume the compositor can handle bad damage *)
+        let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
+        (* sanitize end *)
+        when_configured @@ fun () ->
+        H.Wl_surface.damage_buffer h ~x ~y ~width ~height
+      )
 
     method on_destroy =
       data.state <- Destroyed;
