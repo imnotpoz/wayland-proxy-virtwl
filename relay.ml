@@ -190,19 +190,24 @@ let to_host (type a) (c : (a, 'v, [`Server]) Proxy.t) : (a, 'v, [`Client]) Proxy
     (* Here, a client Gtk corresponds to a host Zwp, so the types aren't right. *)
     failwith "Can't use to_host with GTK translation"
 
+let page_size = Relay_stubs.get_page_size ()
+let page_mask = Int32.sub page_size 1l
+
 (* Validation *)
 module V = struct
   let max_window_width_int32 = 16384l
   let max_window_height_int32 = 6144l
   let check_width_height_int32 t raise ~untrusted_width ~untrusted_height =
     if untrusted_width <= 0l then (
-      raise t ~message:"Width %ld is negative or 0" untrusted_width
+      raise t ~message:(Format.asprintf "Width 0x%lx is negative or 0" untrusted_width)
     ) else if untrusted_width > max_window_width_int32 then (
-      raise t ~message:"Width %ld is excessive" untrusted_width
+      raise t ~message:(Format.asprintf "Width 0x%lx is excessive (limit 0x%lx)"
+                          untrusted_width max_window_width_int32)
     ) else if untrusted_height <= 0l then (
-      raise t ~message:"Height %ld is negative or 0" untrusted_height
+      raise t ~message:(Format.asprintf "Height 0x%lx is negative or 0" untrusted_height)
     ) else if untrusted_height > max_window_height_int32 then (
-      raise t ~message:"Height %ld is excessive" untrusted_height
+      raise t ~message:(Format.asprintf "Height 0x%lx is excessive (limit 0x%lx)"
+                          untrusted_height max_window_height_int32)
     ) else (
       ()
     )
@@ -278,30 +283,26 @@ let validate_shm_parameters
       ~(untrusted_width:int32)
       ~(untrusted_height:int32)
       ~(untrusted_stride:int32)
-      ~(untrusted_format:int32)
+      ~(format:int32)
       (shm: _ C.Wl_shm_pool.t) =
-  V.check_width_height_int32 shm shm_pool_invalid_stride_str ~untrusted_width ~untrusted_height;
-  (if untrusted_offset < 0l then
-    shm_pool_invalid_stride shm "Negative offset %ld" untrusted_offset
-  else if untrusted_stride < 1l then
-    shm_pool_invalid_stride shm "Negative or zero stride %ld" untrusted_stride
-  else if buffer_size < 0l then
-    assert false (* bug *));
-  (* Overflow impossible: [Int32.max_int * Int32.max_int + Int32.max_int < Int64.max_int] *)
-  let area = Int64.mul (Int64.of_int32 untrusted_height) (Int64.of_int32 untrusted_stride) in
-  let end_pointer = Int64.add area (Int64.of_int32 untrusted_offset) in
-  if end_pointer > Int64.of_int32 buffer_size then (
+  (if buffer_size < 0l then assert false (* Bug!!! *));
+  V.check_width_height_int32 shm shm_pool_invalid_stride_str ~untrusted_height ~untrusted_width;
+  if untrusted_offset < 0l then
+    shm_pool_invalid_stride shm "Negative offset %ld" untrusted_offset;
+  if untrusted_stride < untrusted_width then
+    shm_pool_invalid_stride shm "Stride %ld is less than width %ld" untrusted_stride untrusted_width;
+  V.check_width_height_int32 shm shm_pool_invalid_stride_str ~untrusted_width:untrusted_stride ~untrusted_height;
+  (* Wraparound impossible due to checks in check_width_height_int32 *)
+  if Int32.mul untrusted_height untrusted_stride > Int32.sub buffer_size untrusted_offset then
     shm_pool_invalid_stride shm "Buffer extends beyond end of pool: size %ldx%ld, \
-                                 stride %ld, offset %ld, area %Ld, end pointer %Ld, buffer size %ld"
-      untrusted_width untrusted_height untrusted_stride untrusted_offset
-      area end_pointer buffer_size
-  ) else (
-    if not (Drm_format.validate_shm ~untrusted_offset ~untrusted_width ~untrusted_height
-            ~untrusted_stride ~untrusted_format) then
-      shm_pool_invalid_stride shm "Invalid buffer parameters for format"
-    else
-      ()
-  )
+                                 stride %ld, offset %ld, buffer size %ld"
+      untrusted_width untrusted_height untrusted_stride untrusted_offset buffer_size;
+  (* TODO: return invalid_format if the format is bad, rather than invalid_stride *)
+  (* TODO: check that the server provided the format *)
+  if not (Drm_format.validate_shm ~untrusted_offset ~untrusted_width ~untrusted_height
+          ~untrusted_stride ~format) then
+    shm_pool_invalid_stride shm "Invalid buffer parameters for format";
+
 
 (* wl_shm memory buffers are allocated by the client inside the guest and
    cannot be shared directly with the host. Instead, we allocate some host
@@ -342,7 +343,7 @@ module Shm : sig
     untrusted_width :int32 ->
     untrusted_height:int32 ->
     untrusted_stride:int32 ->
-    untrusted_format:int32 ->
+    format:int32 ->
     [>`V1] C.Wl_shm_pool.t ->
     [`V1] C.Wl_buffer.t ->
     buffer
@@ -448,13 +449,13 @@ end = struct
     )
 
   let create_buffer (t: t) ~untrusted_offset ~untrusted_width ~untrusted_height
-        ~untrusted_stride ~untrusted_format
+        ~untrusted_stride ~format
         (shm: _ C.Wl_shm_pool.t)
         (buffer: _ C.Wl_buffer.t) : buffer =
     validate_shm_parameters ~buffer_size:t.size ~untrusted_offset ~untrusted_width ~untrusted_height
-        ~untrusted_stride ~untrusted_format shm;
-    let (offset, width, height, stride, format) =
-      (untrusted_offset, untrusted_width, untrusted_height, untrusted_stride, untrusted_format) in
+        ~untrusted_stride ~format shm;
+    let (offset, width, height, stride) =
+      (untrusted_offset, untrusted_width, untrusted_height, untrusted_stride) in
     assert (t.ref_count > 0);
     let () =
       let ref_count = t.ref_count in
@@ -472,7 +473,7 @@ end = struct
       lazy (
         (* Forced by [map_buffer] when the the buffer is attached to a surface,
            so buffer proxy still exists.  Overflow is impossible because
-           [Drm_format.validate_shm] checks for it.
+           [Drm_format.validate_shm] checks for it in C.
          *)
         let len = Int32.to_int height * Int32.to_int stride in
         let mapping = get_mapping t in
@@ -746,15 +747,29 @@ let make_shm_buffer b proxy =
     method on_destroy _ = Shm.destroy_buffer b
   end
 
+module IntSet = Set.Make(Int32)
+(* OCaml sets are immutable, so it is okay to have the default be at toplevel *)
+let default_formats = IntSet.add 0l (IntSet.add 1l IntSet.empty)
+let check_format ~proxy ~formats ~untrusted_format =
+  if IntSet.mem untrusted_format (!formats) then
+    untrusted_format
+  else
+    let message = Format.asprintf "Format %ld not provided by server" untrusted_format in
+    Proxy.post_error proxy ~code:0l ~message
+(** Check if [untrusted_format] was provided by the server (is a member of [formats]).
+    [proxy] is used to raise a protocol error if it is not. *)
+
 (* todo: this all needs to be more robust.
    Also, sealing? *)
-let make_shm_pool_virtwl ~virtio_gpu ~host_shm proxy ~fd:client_fd ~size:orig_size =
+let make_shm_pool_virtwl ~virtio_gpu ~host_shm proxy ~fd:client_fd ~size:orig_size ~formats =
   let mapping = Shm.create ~host_shm ~virtio_gpu ~client_fd ~size:orig_size proxy in
   Proxy.Handler.attach proxy @@ object
     inherit [_] C.Wl_shm_pool.v1
+    val formats = formats
 
     method on_create_buffer proxy buffer ~untrusted_offset ~untrusted_width ~untrusted_height ~untrusted_stride ~untrusted_format =
-      let b = Shm.create_buffer mapping ~untrusted_offset ~untrusted_width ~untrusted_height ~untrusted_stride ~untrusted_format proxy buffer in
+      let format = check_format ~proxy ~formats ~untrusted_format in
+      let b = Shm.create_buffer mapping ~untrusted_offset ~untrusted_width ~untrusted_height ~untrusted_stride ~format proxy buffer in
       make_shm_buffer b buffer
 
     method on_destroy t = Proxy.delete t
@@ -763,14 +778,17 @@ let make_shm_pool_virtwl ~virtio_gpu ~host_shm proxy ~fd:client_fd ~size:orig_si
     method on_resize _ ~untrusted_size = Shm.resize mapping untrusted_size
   end
 
-let make_shm_pool_direct size host_pool proxy =
+let make_shm_pool_direct size host_pool proxy ~formats =
+  assert (size > 0l);
   Proxy.Handler.attach proxy @@ object
     val mutable buffer_size = size
+    val formats = formats
     inherit [_] C.Wl_shm_pool.v1
 
     method on_create_buffer shm buffer ~untrusted_offset ~untrusted_width ~untrusted_height ~untrusted_stride ~untrusted_format =
+      let format = check_format ~proxy ~formats ~untrusted_format in
       validate_shm_parameters ~buffer_size ~untrusted_offset ~untrusted_width ~untrusted_height
-        ~untrusted_stride ~untrusted_format shm;
+        ~untrusted_stride ~format shm;
       let (offset, width, height, stride, format) =
         (untrusted_offset, untrusted_width, untrusted_height, untrusted_stride, untrusted_format) in
       let host_buffer = H.Wl_shm_pool.create_buffer host_pool ~offset ~width ~height ~stride ~format @@ object
@@ -942,16 +960,20 @@ let make_seat ~xwayland t bind c =
 
 let make_shm ~virtio_gpu bind c =
   let c = Proxy.cast_version c in
+  let formats = ref default_formats in
   let h = bind @@ object
       inherit [_] H.Wl_shm.v1
       method on_format p ~format =
         (* Check that the format is one that can be supported. *)
-        if format = 0l || format = 1l then (
+        let format_set = !formats in
+        if IntSet.mem format format_set then (
           (* Do nothing.  This message is redundant. *)
         ) else if Relay_stubs.validate_shm_format ~untrusted_format:format then (
           (* Format can be used and won't trigger spurious protocol errors. *)
           match ((C.Wl_shm.Format.of_int32 ~_proxy:p ~value:format): Wayland_proto.Wl_shm.Format.t) with
-          | _ -> C.Wl_shm.format c ~format
+          | _ ->
+            formats := IntSet.add format (!formats);
+            C.Wl_shm.format c ~format
           | exception Msg.Error _ -> (
           (* Format will be rejected during message unmarshalling. *)
           )
@@ -963,16 +985,28 @@ let make_shm ~virtio_gpu bind c =
   in
   Proxy.Handler.attach c @@ object
     inherit [_] C.Wl_shm.v1
-    method on_create_pool _ proxy ~untrusted_fd ~untrusted_size =
+    method on_create_pool v proxy ~untrusted_fd ~untrusted_size =
+      let size =
+        if untrusted_size <= 0l then
+          let () = Unix.close untrusted_fd in
+          C.Wl_shm.Errors.invalid_stride v ~message:"negative pool size"
+        else if (Int32.logand untrusted_size page_mask <> 0l) then
+          let () = Unix.close untrusted_fd in
+          C.Wl_shm.Errors.invalid_stride v ~message:(
+              Format.asprintf "Pool size %ld not multiple of page size %ld"
+                untrusted_size page_size)
+        else
+          untrusted_size
+      in
       (* FIXME: sanitize! *)
-      let (fd, size) = (untrusted_fd, untrusted_size) in
+      let fd = untrusted_fd in
       (* FIXME end *)
       match virtio_gpu with
-      | Some virtio_gpu -> make_shm_pool_virtwl ~virtio_gpu ~host_shm:h proxy ~fd ~size
+      | Some virtio_gpu -> make_shm_pool_virtwl ~virtio_gpu ~host_shm:h proxy ~fd ~size ~formats
       | None ->
         let host_pool = H.Wl_shm.create_pool h ~fd ~size @@ new H.Wl_shm_pool.v1 in
         Unix.close fd;
-        make_shm_pool_direct size host_pool proxy
+        make_shm_pool_direct size host_pool proxy ~formats
 
     method on_release = delete_with H.Wl_shm.release h
   end

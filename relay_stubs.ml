@@ -8,6 +8,13 @@ external check_fd_offset : Unix.file_descr -> (int64[@unboxed]) =
     @return -1 if lseek() fails or if the file is bigger than INT64_MAX.
     Otherwise, returns the offset of the end of the file. *)
 
+external get_page_size : unit -> int32 = 
+  "wayland_proxy_virtwl_get_page_size"
+(** Get the system page size.  Always returns a power of 2.
+    Raises [Unix.Unix_error] on failure.
+
+    @return The system page size. *)
+
 external validate_pipe : Unix.file_descr -> int = "wayland_proxy_virtwl_validate_pipe"
 type pipe_info = Success
                | Non_AF_UNIX_Socket

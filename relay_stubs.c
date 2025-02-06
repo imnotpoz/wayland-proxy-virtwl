@@ -1,10 +1,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
 #include "drm_fourcc.h"
 #include <drm/drm_fourcc.h>
 
@@ -35,6 +37,34 @@ get_fd_size(long fd)
    }
 
    return (int64_t)untrusted_raw_size;
+}
+
+CAMLprim value
+wayland_proxy_virtwl_get_page_size(value unit)
+{
+   assert(unit == Val_unit);
+   errno = 0;
+   long res = sysconf(_SC_PAGE_SIZE);
+   if (res < -1) {
+      caml_fatal_error("Bad return value %ld from sysconf(_SC_PAGE_SIZE)", res);
+   }
+   if (res == -1) {
+      if (errno == 0) {
+         caml_fatal_error("sysconf(_SC_PAGE_SIZE) failed without error");
+      } else {
+         caml_unix_error(errno, "sysconf(_SC_PAGE_SIZE)", Nothing);
+      }
+   }
+   if (res < 1) {
+      caml_fatal_error("sysconf(_SC_PAGE_SIZE) returned zero bytes");
+   }
+   if ((res & (res - 1)) != 0) {
+      caml_fatal_error("sysconf(_SC_PAGE_SIZE) returned 0x%lx, which is not a power of 2", res);
+   }
+   if (res > INT32_MAX) {
+      caml_fatal_error("sysconf(_SC_PAGE_SIZE) returned 0x%lx > 0x7FFFFFFF", res);
+   }
+   return caml_copy_int32((int32_t)res);
 }
 
 CAMLprim int64_t
@@ -222,6 +252,7 @@ wayland_proxy_virtwl_validate_pipe(value arg)
    }
 }
 
+/* TODO: better error messages */
 static bool
 validate_shm(int32_t untrusted_offset,
              int32_t const untrusted_width, int32_t const untrusted_height,
