@@ -253,14 +253,26 @@ let make_region ~host_region r =
     inherit [_] C.Wl_region.v1
     method! user_data = user_data
     method on_add t ~untrusted_x ~untrusted_y ~untrusted_width ~untrusted_height =
-      V.check_x_y t bad_impl ~untrusted_x ~untrusted_y;
-      V.check_width_height_int32 t bad_impl ~untrusted_width ~untrusted_height;
+      if false then
+        ( V.check_x_y t bad_impl ~untrusted_x ~untrusted_y
+        ; V.check_width_height_int32 t bad_impl ~untrusted_width ~untrusted_height
+        )
+      else if untrusted_width < 0l || untrusted_height < 0l then
+        ( let message = Format.asprintf "Negative width or height: %ldx%ld" untrusted_width untrusted_height
+          in bad_impl t ~message
+        );
       let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
       (* sanitize end *)
       H.Wl_region.add h ~x ~y ~width ~height
     method on_subtract t ~untrusted_x ~untrusted_y ~untrusted_width ~untrusted_height =
-      V.check_x_y t bad_impl ~untrusted_x ~untrusted_y;
-      V.check_width_height_int32 t bad_impl ~untrusted_width ~untrusted_height;
+      if false then
+        ( V.check_x_y t bad_impl ~untrusted_x ~untrusted_y
+        ; V.check_width_height_int32 t bad_impl ~untrusted_width ~untrusted_height
+        )
+      else if untrusted_width < 0l || untrusted_height < 0l then
+        ( let message = Format.asprintf "Negative width or height: %ldx%ld" untrusted_width untrusted_height
+          in bad_impl t ~message
+        );
       let (x, y, width, height) = (untrusted_x, untrusted_y, untrusted_width, untrusted_height) in
       (* sanitize end *)
       H.Wl_region.subtract h ~x ~y ~width ~height
