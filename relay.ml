@@ -769,7 +769,7 @@ let make_shm_buffer b proxy =
 
 module IntSet = Set.Make(Int32)
 (* OCaml sets are immutable, so it is okay to have the default be at toplevel *)
-let default_formats = IntSet.add 0l (IntSet.add 1l IntSet.empty)
+let default_formats = IntSet.empty
 let check_format ~proxy ~formats ~untrusted_format =
   if IntSet.mem untrusted_format (!formats) then
     untrusted_format
