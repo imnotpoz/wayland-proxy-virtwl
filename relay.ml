@@ -825,11 +825,17 @@ let make_shm_pool_direct size host_pool proxy ~formats =
     method on_destroy _ = H.Wl_shm_pool.destroy host_pool
 
     method on_resize c ~untrusted_size =
-      (if untrusted_size < buffer_size then
-        shm_pool_invalid_stride_str c ~message:"Attempt to shrink buffer");
-      let size = unsafe_no_sanitize untrusted_size in
-      H.Wl_shm_pool.resize host_pool ~size;
-      buffer_size <- size
+      if untrusted_size < buffer_size then (
+        shm_pool_invalid_stride_str c ~message:(
+            Format.asprintf "Attempt to shrink buffer: 0x%lx < 0x%lx"
+              untrusted_size buffer_size)
+      ) else if untrusted_size = size then (
+        (* do nothing *)
+      ) else (
+        let size = untrusted_size in
+        H.Wl_shm_pool.resize host_pool ~size;
+        buffer_size <- size
+      )
   end
 
 let make_output ~xwayland bind c =
