@@ -772,6 +772,8 @@ module IntSet = Set.Make(Int32)
 let default_formats = IntSet.empty
 let check_format ~proxy ~formats ~untrusted_format =
   if IntSet.mem untrusted_format (!formats) then
+    (* We check that the format is usable when adding the format to the set,
+       so no need to check again. *)
     untrusted_format
   else
     let message = Format.asprintf "Format %ld not provided by server" untrusted_format in
