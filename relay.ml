@@ -923,6 +923,35 @@ let make_pointer t ~xwayland ~host_seat c =
       delete_with H.Wl_pointer.release h t
   end
 
+let make_touch t ~xwayland ~host_seat c =
+  let c = cv c in
+  let h : _ Proxy.t = H.Wl_seat.get_touch host_seat @@ object
+      inherit [_] H.Wl_touch.v1
+
+      method on_down _ ~serial ~time ~surface =
+        update_serial t serial;
+        C.Wl_touch.down c ~serial ~time ~surface:(to_client surface)
+
+      method on_up _ ~serial =
+        update_serial t serial;
+        C.Wl_touch.up c ~serial
+
+      method on_motion _ ~time ~id ~x ~y =
+        let (x, y) = point_to_client ~xwayland (x, y) in
+        C.Wl_touch.motion c ~time ~id ~x ~y
+
+      method on_frame _ = C.Wl_touch.frame c
+      method on_cancel _ = C.Wl_touch.cancel c
+      method on_shape _ = C.Wl_touch.shape c
+      method on_orientation _ = C.Wl_touch.orientation c
+    end
+  in
+  Proxy.Handler.attach c @@ object
+    inherit [_] C.Wl_touch.v1
+
+    method on_release = delete_with H.Wl_touch.release h
+  end
+
 let make_keyboard t ~xwayland ~host_seat c =
   let h : _ Proxy.t = H.Wl_seat.get_keyboard host_seat @@ object
       inherit [_] H.Wl_keyboard.v1
@@ -966,7 +995,7 @@ let make_keyboard t ~xwayland ~host_seat c =
 
 let make_seat ~xwayland t bind c =
   let c = Proxy.cast_version c in
-  let cap_mask = C.Wl_seat.Capability.(Int32.logor keyboard pointer) in
+  let cap_mask = C.Wl_seat.Capability.(Int32.logor keyboard @@ Int32.logor pointer touch) in
   let host = bind @@ object
       inherit [_] H.Wl_seat.v1
 
@@ -982,7 +1011,7 @@ let make_seat ~xwayland t bind c =
     method! user_data = user_data
     method on_get_keyboard _ keyboard = make_keyboard ~xwayland t ~host_seat:host keyboard
     method on_get_pointer _ c = make_pointer ~xwayland t ~host_seat:host c
-    method on_get_touch _ = Fmt.failwith "TODO: on_get_touch"
+    method on_get_touch _ c = make_touch ~xwayland t ~host_seat:host c
     method on_release = delete_with H.Wl_seat.release host
   end
 
