@@ -1878,6 +1878,87 @@ let make_pointer_constraints bind proxy =
       make_confined_pointer ~host_pointer locked_pointer
   end
 
+let make_swipe_gesture t ~host_swipe_gesture c = 
+  let h = host_swipe_gesture @@ object
+      inherit [_] H.Zwp_pointer_gesture_swipe_v1.v1
+
+      method on_begin _ ~serial ~time ~surface =
+        let surface = to_client surface in
+        update_serial t serial;
+        C.Zwp_pointer_gesture_swipe_v1.begin_ c ~serial ~time ~surface
+
+      method on_update _ = C.Zwp_pointer_gesture_swipe_v1.update c
+
+      method on_end _ ~serial =
+        update_serial t serial;
+        C.Zwp_pointer_gesture_swipe_v1.end_ c ~serial
+    end in
+  Proxy.Handler.attach c @@ object
+    inherit [_] C.Zwp_pointer_gesture_swipe_v1.v1
+    method on_destroy = delete_with H.Zwp_pointer_gesture_swipe_v1.destroy h
+  end
+
+let make_pinch_gesture t ~host_pinch_gesture c = 
+  let h = host_pinch_gesture @@ object
+      inherit [_] H.Zwp_pointer_gesture_pinch_v1.v1
+
+      method on_begin _ ~serial ~time ~surface =
+        let surface = to_client surface in
+        update_serial t serial;
+        C.Zwp_pointer_gesture_pinch_v1.begin_ c ~serial ~time ~surface
+
+      method on_update _ = C.Zwp_pointer_gesture_pinch_v1.update c
+
+      method on_end _ ~serial =
+        update_serial t serial;
+        C.Zwp_pointer_gesture_pinch_v1.end_ c ~serial
+    end in
+  Proxy.Handler.attach c @@ object
+    inherit [_] C.Zwp_pointer_gesture_pinch_v1.v1
+    method on_destroy = delete_with H.Zwp_pointer_gesture_pinch_v1.destroy h
+  end
+
+let make_hold_gesture t ~host_hold_gesture c = 
+  let h = host_hold_gesture @@ object
+      inherit [_] H.Zwp_pointer_gesture_hold_v1.v1
+
+      method on_begin _ ~serial ~time ~surface =
+        let surface = to_client surface in
+        update_serial t serial;
+        C.Zwp_pointer_gesture_hold_v1.begin_ c ~serial ~time ~surface
+
+      method on_end _ ~serial =
+        update_serial t serial;
+        C.Zwp_pointer_gesture_hold_v1.end_ c ~serial
+    end in
+  Proxy.Handler.attach c @@ object
+    inherit [_] C.Zwp_pointer_gesture_hold_v1.v1
+    method on_destroy = delete_with H.Zwp_pointer_gesture_hold_v1.destroy h
+  end
+
+let make_pointer_gestures t bind proxy =
+  let proxy = Proxy.cast_version proxy in
+  let h = bind @@ new H.Zwp_pointer_gestures_v1.v1 in
+  Proxy.Handler.attach proxy @@ object
+    inherit [_] C.Zwp_pointer_gestures_v1.v1
+    method on_release = delete_with H.Zwp_pointer_gestures_v1.release h
+
+    method on_get_swipe_gesture _ swipe_gesture ~pointer =
+      let pointer = to_host pointer in
+      let host_swipe_gesture = H.Zwp_pointer_gestures_v1.get_swipe_gesture h ~pointer in
+      make_swipe_gesture t ~host_swipe_gesture swipe_gesture
+
+    method on_get_pinch_gesture _ pinch_gesture ~pointer =
+      let pointer = to_host pointer in
+      let host_pinch_gesture = H.Zwp_pointer_gestures_v1.get_pinch_gesture h ~pointer in
+      make_pinch_gesture t ~host_pinch_gesture pinch_gesture
+
+    method on_get_hold_gesture _ hold_gesture ~pointer =
+      let pointer = to_host pointer in
+      let host_hold_gesture = H.Zwp_pointer_gestures_v1.get_hold_gesture h ~pointer in
+      make_hold_gesture t ~host_hold_gesture hold_gesture
+  end
+
 (* This is basically the same as [Gtk_primary], but with things renamed a bit. *)
 module Zwp_primary = struct
   let make_data_offer ~client_offer h =
@@ -1973,6 +2054,7 @@ let registry =
     (module Zxdg_decoration_manager_v1);
     (module Zwp_relative_pointer_manager_v1);
     (module Zwp_pointer_constraints_v1);
+    (module Zwp_pointer_gestures_v1);
     (module Zwp_linux_dmabuf_v1);
   ]
 
@@ -2031,6 +2113,7 @@ let make_registry ~xwayland t reg =
       | Zxdg_decoration_manager_v1.T -> make_xdg_decoration_manager bind proxy
       | Zwp_relative_pointer_manager_v1.T -> make_relative_pointer_manager bind proxy
       | Zwp_pointer_constraints_v1.T -> make_pointer_constraints bind proxy
+      | Zwp_pointer_gestures_v1.T -> make_pointer_gestures t bind proxy
       | Zwp_linux_dmabuf_v1.T -> Linux_dmabuf.make_linux_dmabuf ~virtio_gpu:t.host.virtio_gpu bind proxy
       | _ -> Fmt.failwith "Invalid service name for %a" Proxy.pp proxy
   end;
