@@ -83,9 +83,6 @@ static const struct drm_format_info *
 get_format(uint32_t untrusted_format)
 {
    switch (untrusted_format) {
-   case DRM_FORMAT_ARGB8888:
-   case DRM_FORMAT_XRGB8888:
-      return NULL;
    case 0:
       untrusted_format = DRM_FORMAT_ARGB8888;
       break;
