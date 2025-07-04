@@ -11,6 +11,17 @@
         inherit (pkgs) ocamlPackages;
       in
       {
+        devShells.default = pkgs.mkShell {
+          packages = [
+            ocamlPackages.ocaml-lsp
+            ocamlPackages.ocamlformat
+          ];
+
+          inputsFrom = [
+            self.packages.${system}.proxy
+          ];
+        };
+
         packages = {
           proxy =
             # Based on build rule in nixpkgs, by qyliss and sternenseemann
