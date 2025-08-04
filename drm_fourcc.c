@@ -25,7 +25,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <drm/drm_fourcc.h>
+#include <libdrm/drm_fourcc.h>
 #include "drm_fourcc_table.h"
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
 

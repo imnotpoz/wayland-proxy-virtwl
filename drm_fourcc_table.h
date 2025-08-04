@@ -1,5 +1,4 @@
 #include <stdbool.h>
-#include <drm/drm_fourcc.h>
 #include "drm_fourcc.h"
 
 struct drm_format_info formats[118] = {

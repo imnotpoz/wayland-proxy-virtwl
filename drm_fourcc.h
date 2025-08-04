@@ -23,7 +23,7 @@
 #define __DRM_FOURCC_H__
 
 #include <stdint.h>
-#include <drm/drm_fourcc.h>
+#include <libdrm/drm_fourcc.h>
 
 /**
  * DRM_FORMAT_MAX_PLANES - maximum number of planes a DRM format can have

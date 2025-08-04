@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #include "drm_fourcc.h"
-#include <drm/drm_fourcc.h>
 
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
