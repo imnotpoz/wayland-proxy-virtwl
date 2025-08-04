@@ -196,30 +196,28 @@ let page_mask = Int32.sub page_size 1l
 (* Validation *)
 module V = struct
   let max_window_width_int32 = 16384l
-  let max_window_height_int32 = 6144l
+  let max_window_height_int32 = 16384l (* record so far: Firefox uses 16332 at some point *)
   let check_width_height_int32 t raise ~untrusted_width ~untrusted_height =
     if untrusted_width <= 0l then (
       raise t ~message:(Format.asprintf "Width 0x%lx is negative or 0" untrusted_width)
     ) else if untrusted_width > max_window_width_int32 then (
-      raise t ~message:(Format.asprintf "Width 0x%lx is excessive (limit 0x%lx)"
-                          untrusted_width max_window_width_int32)
+      Log.warn (fun f -> f "Width 0x%lx is excessive (limit 0x%lx)"
+                           untrusted_width max_window_width_int32)
     ) else if untrusted_height <= 0l then (
       raise t ~message:(Format.asprintf "Height 0x%lx is negative or 0" untrusted_height)
     ) else if untrusted_height > max_window_height_int32 then (
-      raise t ~message:(Format.asprintf "Height 0x%lx is excessive (limit 0x%lx)"
-                          untrusted_height max_window_height_int32)
+      Log.warn (fun f -> f "Height 0x%lx is excessive (limit 0x%lx)"
+                           untrusted_height max_window_height_int32)
     ) else (
       ()
     )
+  (* max is a max, don't complain about it being too big.
+     e.g. Wireshark sends xdg_toplevel#23.set_max_size(16777217, 16777255) *)
   let check_max_width_height t raise ~untrusted_width ~untrusted_height =
     if untrusted_width < 0l then (
-      raise t ~message:(Format.asprintf "Width %ld is negative" untrusted_width)
-    ) else if untrusted_width > max_window_width_int32 then (
-      raise t ~message:(Format.asprintf "Width %ld is excessive" untrusted_width)
+      raise t ~message:(Format.asprintf "Max width %ld is negative" untrusted_width)
     ) else if untrusted_height < 0l then (
-      raise t ~message:(Format.asprintf "Height %ld is negative" untrusted_height)
-    ) else if untrusted_height > max_window_height_int32 then (
-      raise t ~message:(Format.asprintf "Height %ld is excessive" untrusted_height)
+      raise t ~message:(Format.asprintf "Max height %ld is negative" untrusted_height)
     ) else (
       ()
     )
@@ -227,11 +225,11 @@ module V = struct
     if untrusted_x < Int32.sub 0l max_window_width_int32 then (
       raise t ~message:(Format.asprintf "X %ld is too negative" untrusted_x)
     ) else if untrusted_x > max_window_width_int32 then (
-      raise t ~message:(Format.asprintf "X %ld is excessive" untrusted_x)
+      Log.warn (fun f -> f "X %ld is excessive" untrusted_x)
     ) else if untrusted_y < Int32.sub 0l max_window_height_int32 then (
       raise t ~message:(Format.asprintf "Y %ld is too negative" untrusted_y)
     ) else if untrusted_y > max_window_height_int32 then (
-      raise t ~message:(Format.asprintf "Y %ld is excessive" untrusted_y)
+      Log.warn (fun f -> f "Y %ld is excessive" untrusted_y)
     ) else (
       ()
     )

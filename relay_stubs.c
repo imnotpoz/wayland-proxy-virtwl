@@ -154,7 +154,7 @@ validate_format(uint32_t const untrusted_format,
       return NULL; /* No pixels. */
    }
 
-   if (untrusted_width > 16384 || untrusted_height > 6144) {
+   if (untrusted_width > 16384 || untrusted_height > 16384) {
       return NULL; /* Too wide, too tall, or both. */
    }
 
