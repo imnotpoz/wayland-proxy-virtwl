@@ -18,4 +18,5 @@
    (ocaml (>= 5.1.0))
    (fmt (>= 0.8.9))
    conf-pkg-config
+   (memfd (>= 0.1.0))
    (wayland (>= 2.0))))
