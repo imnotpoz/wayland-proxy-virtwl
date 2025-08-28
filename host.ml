@@ -20,7 +20,7 @@ let connect ?error_callback ?virtio_gpu ~sw transport =
       Log.info (fun f -> f "Host does not support dmabuf");
       None
     | Some dma ->
-        Log.warn (fun f -> f "Host is using dmabuf - this probably won't work yet");
+        Log.info (fun f -> f "Host is using dmabuf");
         Some dma
   in
   {
