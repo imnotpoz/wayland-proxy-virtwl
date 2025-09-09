@@ -80,6 +80,12 @@ type t = {
 
 let update_serial t serial = t.host.last_serial <- serial
 
+let protect_fd fd f =
+  let cell = ref @@ Some fd in
+  let peek_fd () = Option.get !cell in
+  let take_fd () = (let value = Option.get !cell in (cell := None; value)) in
+  Fun.protect ~finally:(fun () -> Option.iter Unix.close !cell) (fun () -> f ~peek_fd ~take_fd)
+
 (* Data attached to host objects (e.g. the corresponding client object).
    Host and client versions are assumed to match. *)
 module HD = struct
@@ -1099,8 +1105,9 @@ module Linux_dmabuf = struct
       val mutable modifier_hi = 0l
       val buffer_data = [|None; None; None; None|];
       inherit ['a] C.Zwp_linux_buffer_params_v1.v1
-      (* FIXME: close the file descriptors *)
-      method on_destroy = delete_with H.Zwp_linux_buffer_params_v1.destroy h
+      method on_destroy =
+        Array.iter (Option.iter (fun (fd, _, _) -> Unix.close fd)) buffer_data;
+        delete_with H.Zwp_linux_buffer_params_v1.destroy h
       method on_create_immed t buffer ~untrusted_width ~untrusted_height ~untrusted_format ~untrusted_flags =
         self#add t ~untrusted_format ~untrusted_width ~untrusted_height;
         (* TODO: check format, flags, etc *)
@@ -1142,12 +1149,10 @@ module Linux_dmabuf = struct
           match buffer_data.(plane_idx) with
           | None -> assert false
           | Some (fd, offset, stride) -> (
-            (* Avoid double FD close *)
-            buffer_data.(plane_idx) <- None;
-            (* FIXME: does this take ownership of the FD? *)
             H.Zwp_linux_buffer_params_v1.add h ~plane_idx:(Int32.of_int plane_idx) ~fd ~offset ~stride ~modifier_hi ~modifier_lo
           )
         done
+      
       method on_create t ~untrusted_width ~untrusted_height ~untrusted_format ~untrusted_flags =
         (* TODO: check format, flags, etc *)
         self#add t ~untrusted_format ~untrusted_width ~untrusted_height;
@@ -1160,8 +1165,7 @@ module Linux_dmabuf = struct
                ~(untrusted_offset:int32)
                ~(untrusted_stride:int32)
                ~(untrusted_modifier_hi:int32)
-               ~(untrusted_modifier_lo:int32) =
-        (* FIXME: close the file descriptor on errors! *)
+               ~(untrusted_modifier_lo:int32) = protect_fd untrusted_fd (fun ~peek_fd ~take_fd ->
         check_used t created;
         if have_modifiers then begin
           let (lsl) = Int64.shift_left in
@@ -1193,7 +1197,7 @@ module Linux_dmabuf = struct
           let message = Format.asprintf "Negative or zero stride %ld" untrusted_stride in
           C.Zwp_linux_buffer_params_v1.Errors.invalid_dimensions ~message t
         );
-        let size = Relay_stubs.check_fd_offset untrusted_fd in
+        let size = Relay_stubs.check_fd_offset @@ peek_fd () in
         if Int64.of_int32 untrusted_offset >= size then (
           if size < 0L then (
             C.Zwp_linux_buffer_params_v1.Errors.invalid_wl_buffer t
@@ -1205,10 +1209,11 @@ module Linux_dmabuf = struct
         );
         let plane_idx = Int32.to_int untrusted_plane_idx in
         match buffer_data.(plane_idx) with
-        | None -> buffer_data.(plane_idx) <- Some (untrusted_fd, untrusted_offset, untrusted_stride)
+        | None -> buffer_data.(plane_idx) <- Some (take_fd (), untrusted_offset, untrusted_stride)
         | Some _ ->
           let message = Format.asprintf "Plane index %d already used" plane_idx in
           C.Zwp_linux_buffer_params_v1.Errors.already_used ~message t
+        )
     end
 
   let make_linux_dmabuf_feedback ?override_dev ~host_dmabuf_feedback c =
