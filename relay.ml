@@ -1331,7 +1331,7 @@ let make_toplevel ~tag ~host_toplevel c =
             Format.asprintf "Max height %d less than min height %d" untrusted_height_int min_height));
       max_width <- untrusted_width_int;
       max_height <- untrusted_height_int;
-      H.Xdg_toplevel.set_min_size h ~width:untrusted_width ~height:untrusted_height;
+      H.Xdg_toplevel.set_max_size h ~width:untrusted_width ~height:untrusted_height;
     method on_set_maximized _ = H.Xdg_toplevel.set_maximized h
     method on_set_min_size p ~(untrusted_width:int32) ~(untrusted_height:int32): unit =
       V.check_max_width_height p C.Xdg_toplevel.Errors.invalid_size ~untrusted_width ~untrusted_height;
