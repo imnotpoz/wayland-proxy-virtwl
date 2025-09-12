@@ -1645,7 +1645,7 @@ let make_data_offer ~client_offer h =
           C.Wl_data_offer.Errors.invalid_action_mask p ~message:"Invalid action mask")
         | 1l | 2l | 4l when Int32.logand untrusted_preferred_action untrusted_dnd_actions = 0l -> (
           C.Wl_data_offer.Errors.invalid_action_mask p ~message:"Preferred action not in mask")
-        | 1l | 2l | 4l -> (
+        | 0l | 1l | 2l | 4l -> (
           (* sanitized end *)
           H.Wl_data_offer.set_actions h
             ~dnd_actions:untrusted_dnd_actions
